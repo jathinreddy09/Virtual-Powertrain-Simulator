@@ -1,0 +1,90 @@
+VERSION "1.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_:
+
+BU_: EngineECU ABSECU TransECU
+
+VERSION "1.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_:
+
+BU_: EngineECU ABSECU
+
+BO_ 256 EngineData: 8 EngineECU
+ SG_ RPM : 7|16@0+ (4,0) [0|16383] "rpm" EngineECU
+ SG_ Speed : 16|8@1+ (1,0) [0|255] "kmh" EngineECU
+ SG_ Coolant : 24|8@1+ (1,-40) [-40|215] "C" EngineECU
+
+BO_ 512 WheelSpeeds: 8 ABSECU
+ SG_ WheelSpeed_FL : 0|8@1+ (1,0) [0|255] "kmh" ABSECU
+ SG_ WheelSpeed_FR : 8|8@1+ (1,0) [0|255] "kmh" ABSECU
+ SG_ WheelSpeed_RL : 16|8@1+ (1,0) [0|255] "kmh" ABSECU
+ SG_ WheelSpeed_RR : 24|8@1+ (1,0) [0|255] "kmh" ABSECU
+
+BO_ 768 GearboxData: 8 TransECU
+ SG_ Gear : 0|4@1+ (1,0) [0|15] "gear" TransECU
+ SG_ TargetGear : 4|4@1+ (1,0) [0|15] "gear" TransECU
+ SG_ Clutch1_Tq : 8|8@1+ (1,0) [0|255] "%" TransECU
+ SG_ Clutch2_Tq : 16|8@1+ (1,0) [0|255] "%" TransECU
+ SG_ OilTemp : 24|8@1+ (1,-40) [-40|215] "C" TransECU
+ SG_ ShiftInProgress : 32|1@1+ (1,0) [0|1] "" TransECU

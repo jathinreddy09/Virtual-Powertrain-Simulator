@@ -1,0 +1,226 @@
+import can
+import time
+import sys
+import random
+import cantools
+import os
+
+sys.stdout.write("\033]0;Transmission ECU\007")
+sys.stdout.flush()
+
+# ============================
+# MODE & SHIFTING CONSTANTS
+# ============================
+MODE_FILE = "/home/jathin/Desktop/CAN_LAB/tcu_mode.txt"
+# File contents: "D" for Drive, "S" for Sport
+# ============================
+# SHIFT / MODE CONSTANTS
+# ============================
+ENGINE_BRAKE_THROTTLE = 2          # treat 0–2% as "off throttle"
+
+# You said you set this to 1.5 already -> keep that as DRIVE engine-brake factor
+ENGINE_BRAKE_DOWNSHIFT_FAC_DRIVE = 1.5
+
+# SPORT: more aggressive engine braking (earlier downshift on lift-off)
+ENGINE_BRAKE_DOWNSHIFT_FAC_SPORT = 2.2   # try 2.0–2.5 range
+
+# SPORT: hold gears longer (later upshifts)
+SPORT_UPSHIFT_FAC = 1.25                 # 25% higher speed before upshift
+
+# SPORT: “kickdown” feel – earlier downshifts at high throttle
+SPORT_KICKDOWN_THROTTLE = 80             # % throttle to trigger kickdown logic
+SPORT_KICKDOWN_FAC = 1.3                 # downshift earlier when flooring it
+
+
+bus = can.interface.Bus(interface="socketcan", channel="vcan0")
+db = cantools.database.load_file("/home/jathin/Desktop/CAN_LAB/vehicle.dbc")
+
+STATE_FILE = "/home/jathin/Desktop/CAN_LAB/global_state.txt"
+DRIVER_STATE = "/home/jathin/Desktop/CAN_LAB/driver_state.txt"
+
+def is_paused():
+    try:
+        with open(STATE_FILE) as f:
+            return f.read().strip().lower() == "pause"
+    except:
+        return False
+
+def read_driver():
+    throttle = 0
+    brake = 0
+    try:
+        with open(DRIVER_STATE) as f:
+            for line in f:
+                line=line.strip()
+                if line.startswith("THROTTLE="):
+                    throttle = int(line.split("=")[1])
+                if line.startswith("BRAKE="):
+                    brake = int(line.split("=")[1])
+    except:
+        pass
+
+    return throttle, brake
+
+# ============================
+# REALISTIC SHIFT POINT TABLES
+# ============================
+
+
+
+UPSHIFT = {
+    1: [12, 18, 30],
+    2: [22, 30, 45],
+    3: [32, 42, 65],
+    4: [45, 60, 85],
+    5: [58, 75, 105],
+}
+
+DOWNSHIFT = {
+    2: [7, 12, 20],
+    3: [12, 20, 35],
+    4: [20, 32, 50],
+    5: [32, 45, 70],
+    6: [45, 60, 85],
+}
+
+# Initial TCU state
+gear = 1
+target_gear = 1
+shift_progress = 0
+shift_timer = 0.0
+SHIFT_TIME = 0.30      # 300ms shift duration
+
+def get_band(throttle):
+    if throttle < 20:  return 0  # low load
+    if throttle < 50:  return 1  # medium
+    return 2                    # high load
+
+def build_frame(g, t, c1, c2, oil, shifting):
+    msg = db.encode_message("GearboxData", {
+
+        "Gear": g,
+        "TargetGear": t,
+        "Clutch1_Tq": c1,
+        "Clutch2_Tq": c2,
+        "OilTemp": oil,
+        "ShiftInProgress": shifting
+    })
+    return can.Message(arbitration_id=0x300, data=msg, is_extended_id=False)
+
+print("TCU running with real shift points.")
+
+last_speed = 0
+
+try:
+    while True:
+        if is_paused():
+            time.sleep(0.1)
+            continue
+
+        throttle, brake = read_driver()
+
+        # Read ENGINE speed for shift decisions
+        msg = bus.recv(0.01)
+        if msg and msg.arbitration_id == 0x100:
+            d = msg.data
+            speed = d[2]  # engine speed byte (km/h)
+            last_speed = speed
+        else:
+            speed = last_speed
+
+        band = get_band(throttle)
+# Example: mode is either "D" or "S"
+# For now you can just hardcode to test:
+        mode = "D"      # normal
+        mode = "S"    # sport
+
+# later you can read this from a file, keyboard, CAN, etc.
+is_sport = (mode == "S")
+
+        # =====================
+        # SHIFT DECISION LOGIC
+        # =====================
+
+        # If currently shifting:
+        if shift_progress:
+            shift_timer += 0.01
+            c1 = max(0, 100 - (shift_timer / SHIFT_TIME) * 100)
+            c2 = min(100, (shift_timer / SHIFT_TIME) * 100)
+
+            if shift_timer >= SHIFT_TIME:
+                # Finish shift
+                gear = target_gear
+                shift_progress = 0
+                shift_timer = 0
+                c1, c2 = 100, 0
+            
+            oil = 80 + random.uniform(-2, 2)
+
+            out = build_frame(gear, target_gear, int(c1), int(c2), oil, shift_progress)
+            bus.send(out)
+            print(f"Shifting {gear} -> {target_gear} | c1={int(c1)} c2={int(c2)} | speed={speed} km/h thr={throttle}%")
+            time.sleep(0.01)
+            continue
+
+        # NOT shifting → evaluate shift points
+        c1, c2 = 100, 0
+        oil = 80 + random.uniform(-2, 2)
+
+
+        # ==========================
+        # UPSHIFT
+        # ==========================
+        if gear < 6:
+            base_up = UPSHIFT[gear][band]
+
+            if is_sport:
+                # SPORT: hold gears longer -> upshift at higher speed
+                up_limit = base_up * SPORT_UPSHIFT_FAC
+            else:
+                up_limit = base_up
+
+            # Block upshifts completely when we're in engine braking (off throttle)
+            if throttle > ENGINE_BRAKE_THROTTLE and speed > up_limit:
+                target_gear = gear + 1
+                shift_progress = 1
+                shift_timer = 0
+                continue
+
+        # ==========================
+        # DOWNSHIFT
+        # ==========================
+        if gear > 1:
+            base_down = DOWNSHIFT[gear][band]
+
+            if throttle <= ENGINE_BRAKE_THROTTLE:
+                # LIFT-OFF / ENGINE BRAKING
+                if is_sport:
+                    # SPORT: very aggressive engine braking
+                    limit = base_down * ENGINE_BRAKE_DOWNSHIFT_FAC_SPORT
+                else:
+                    # DRIVE: your 1.5 factor
+                    limit = base_down * ENGINE_BRAKE_DOWNSHIFT_FAC_DRIVE
+            else:
+                # SOME THROTTLE
+                if is_sport and throttle >= SPORT_KICKDOWN_THROTTLE:
+                    # SPORT kickdown: earlier downshift when you floor it
+                    limit = base_down * SPORT_KICKDOWN_FAC
+                else:
+                    # Normal driving: original map
+                    limit = base_down
+
+            if speed < limit:
+                target_gear = gear - 1
+                shift_progress = 1
+                shift_timer = 0
+                continue
+
+        # NO SHIFT
+        out = build_frame(gear, gear, c1, c2, oil, 0)
+        bus.send(out)
+        print(f"Gear={gear} | speed={speed} km/h | thr={throttle}%")
+
+        time.sleep(0.01)
+
+except KeyboardInterrupt:
+    print("TCU stopped.")

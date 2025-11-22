@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Start VCAN (Dual Bus)
+Comment=Start vcan0 and vcan1 interfaces
+Exec=bash -c "/home/jathin/Desktop/CAN_LAB/start_vcan_dual.sh"
+Icon=network-wired
+Terminal=true
+Categories=Utility;

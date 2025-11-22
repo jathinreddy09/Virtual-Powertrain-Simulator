@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Engine Logger
+Comment=Log engine CAN data to CSV
+Exec=python3 /home/jathin/Desktop/CAN_LAB/engine_logger.py
+Terminal=true
+Type=Application
+Icon=accessories-notes
