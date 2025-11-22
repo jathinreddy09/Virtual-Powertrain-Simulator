@@ -122,31 +122,6 @@ python gui_dashboard.py
 
 Or use the helper shell scripts (e.g., `start_engine_ecu.sh`, `start_trans_ecu.sh`, etc.).
 
----
-
-## What This Demonstrates (for Portfolio / Resume)
-
-- **Automotive networking (CAN bus)**
-  - Designing arbitration IDs, message layouts, and multi-bus topologies.
-  - Using `python-can` and `cantools` with DBC files to encode/decode signals.
-- **Embedded-style control logic**
-  - Implementing engine and transmission behavior (RPM targets, engine braking, shift maps).
-  - Experimenting with different drive / sport modes and downshift strategies.
-- **Diagnostics & gateways**
-  - Simulating an OBD/diagnostic path using a gateway ECU and a second CAN bus.
-- **Tooling & observability**
-  - Live dashboard for visualizing CAN signals.
-  - Separation into multiple ECUs to mirror production powertrain architectures.
-
-Suggested resume bullet (example):
-
-> Built a multi-ECU virtual powertrain simulation (Engine ECU, TCU, gateway, GUI cluster)
-> using Python, SocketCAN, and DBC files to model RPM/torque, shift logic, and OBD-style
-> diagnostics over a dual-CAN architecture.
-
----
-
-## Future Ideas
 
 - Add a more realistic engine model (bore, stroke, compression ratio, torque curve).
 - Implement simple vehicle longitudinal dynamics (mass, drag, grade).
