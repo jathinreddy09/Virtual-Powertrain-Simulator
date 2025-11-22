@@ -120,11 +120,3 @@ python gateway_ecu.py
 python gui_dashboard.py
 ```
 
-Or use the helper shell scripts (e.g., `start_engine_ecu.sh`, `start_trans_ecu.sh`, etc.).
-
-
-- Add a more realistic engine model (bore, stroke, compression ratio, torque curve).
-- Implement simple vehicle longitudinal dynamics (mass, drag, grade).
-- Add OBD-II PIDs and fault code simulation.
-- Log CAN traffic to file and replay for testing.
-- Export this entire project as a teaching lab for CAN & powertrain controls.
