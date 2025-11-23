@@ -5,7 +5,6 @@ This module opens a graphical window that:
 - Displays RPM, vehicle speed, gear, throttle, and drive mode.
 - Helps visualize and tune the control logic in real time.
 """
-
 import sys
 import time
 import math
@@ -13,6 +12,7 @@ import os
 import can
 import cantools
 import tkinter as tk
+import pygame
 from tkinter import ttk
 
 # Set window title in terminal
@@ -113,6 +113,27 @@ root.columnconfigure(1, weight=2)
 root.columnconfigure(2, weight=1)
 root.rowconfigure(0, weight=3)
 root.rowconfigure(1, weight=2)
+
+# ==== Engine sound setup ====
+engine_channel = None
+try:
+    pygame.mixer.init(frequency=44100, size=-16, channels=1, buffer=512)
+
+    # Load engine loop sound (mono .wav is best)
+    engine_sound = pygame.mixer.Sound("engine_loop.wav")
+
+    # Start playing in a loop
+    engine_channel = engine_sound.play(loops=-1)
+    engine_channel.set_volume(0.0)  # start muted
+except Exception as e:
+    print(f"[AUDIO] Engine sound disabled: {e}")
+    engine_channel = None
+try:
+    turbo_sound = pygame.mixer.Sound("turbo_loop.wav")
+    turbo_chan = turbo_sound.play(loops=-1)
+    turbo_chan.set_volume(0)
+except:
+    turbo_chan = None
 
 # Gauges (RPM / Speed)
 gauge_frame = tk.Frame(root, bg="#20252b")
@@ -339,6 +360,25 @@ def poll_can():
         process_message(msg)
     root.after(20, poll_can)
 
+def update_clutch_bars_simple(gear, shifting):
+    # If shifting, do NOT override — the TCU already updates real torque
+    if shifting:
+        return
+
+    # Odd gears = C1 on, C2 off
+    if gear in (1, 3, 5):
+        c1_bar['value'] = 100
+        c2_bar['value'] = 0
+
+    # Even gears = C2 on, C1 off
+    elif gear in (2, 4, 6):
+        c1_bar['value'] = 0
+        c2_bar['value'] = 100
+
+    # Neutral
+    else:
+        c1_bar['value'] = 0
+        c2_bar['value'] = 0
 
 def update_gui():
     rpm = state["RPM"]
@@ -357,6 +397,45 @@ def update_gui():
     oil_label.config(text=f"Oil: {oil:3.0f} °C")
     shift_label.config(text=f"Shifting: {'Yes' if shifting else 'No'}")
 
+    # ==== Improved engine sound ====
+    try:
+        max_rpm = 7000.0
+        thr = driver_state.get("throttle", 0)
+
+        rpm_norm = max(0.0, min(rpm / max_rpm, 1.0))
+        thr_norm = max(0.0, min(thr / 100.0, 1.0))
+
+        # Non-linear shaping for realism
+        # Aggressive response near 3k–5k rpm where turbo would spool
+        rpm_curve = rpm_norm ** 1.6  
+        thr_curve = thr_norm ** 1.3  
+
+        # Base idle sound
+        base_idle = 0.12
+
+        # More realistic turbo-ish ramp
+        volume = base_idle + (rpm_curve * 0.4) + (thr_curve * 0.5)
+
+        # Clamp
+        volume = max(0.0, min(volume, 1.0))
+
+        # Apply
+        if engine_channel:
+            engine_channel.set_volume(volume)
+
+    except Exception:
+        pass
+    # ==== Turbo spool ====
+    try:
+        # turbo wakes up around 2500–4000 rpm and medium+ throttle
+        turbo_factor = max(0.0, min((rpm - 2500) / 3000, 1.0))
+        turbo_factor *= (thr_norm ** 1.5)
+
+        if turbo_chan:
+            turbo_chan.set_volume(turbo_factor * 0.8)
+    except:
+        pass
+
     if gear == 0:
         gear_text = "N"
     else:
@@ -368,6 +447,7 @@ def update_gui():
 
     c1_bar["value"] = max(0, min(c1, 100))
     c2_bar["value"] = max(0, min(c2, 100))
+    update_clutch_bars_simple(gear, shifting)
 
     fl = state["Wheel_FL"]
     fr = state["Wheel_FR"]
